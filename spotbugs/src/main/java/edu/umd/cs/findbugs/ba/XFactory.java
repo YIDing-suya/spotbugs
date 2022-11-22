@@ -398,6 +398,7 @@ public class XFactory {
             boolean methodHasCloseInName = false;
             String methodName = xmethod.getName();
             SplitCamelCaseIdentifier splitter = new SplitCamelCaseIdentifier(methodName);
+            //op2
             methodHasCloseInName = splitter.split().contains("close");
             Obligation[] paramObligationTypes = database.getFactory().getParameterObligationTypes(xmethod);
 

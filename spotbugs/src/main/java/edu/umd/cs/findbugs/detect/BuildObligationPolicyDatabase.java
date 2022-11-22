@@ -20,8 +20,10 @@
 package edu.umd.cs.findbugs.detect;
 
 import java.net.URL;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 
 import javax.annotation.WillClose;
@@ -62,7 +64,11 @@ import edu.umd.cs.findbugs.util.RegexStringMatcher;
 import edu.umd.cs.findbugs.util.SplitCamelCaseIdentifier;
 import edu.umd.cs.findbugs.util.SubtypeTypeMatcher;
 import edu.umd.cs.findbugs.util.Values;
+import java.io.BufferedReader;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 
+    
 /**
  * Build the ObligationPolicyDatabase used by ObligationAnalysis. We preload the
  * database with some known resources types needing to be released, and augment
@@ -73,6 +79,35 @@ import edu.umd.cs.findbugs.util.Values;
  */
 public class BuildObligationPolicyDatabase implements Detector2, NonReportingDetector {
 
+    public List<String[]> parseCSV(String fileName) {
+
+        List<String[]> rows = new ArrayList<String[]>();
+
+        System.out.println("parsing");
+        try {
+           
+            URL url = this.getClass().getResource(fileName);
+
+            System.out.println("url::::"+url);
+            System.out.println(url.getFile());
+            InputStream is = this.getClass().getResourceAsStream(fileName);
+
+            BufferedReader br = new BufferedReader(new InputStreamReader(is));
+
+            String s = "";
+            while ((s = br.readLine()) != null) {
+                System.out.println(s);
+                String[] row = s.split(",");
+                rows.add(row);
+            }
+
+        } catch (Exception e) {
+            System.out.println("parsing error");
+            System.out.println(e.toString());
+        }
+
+        return rows;
+    }
     static class AuxiliaryObligationPropertyDatabase extends MethodPropertyDatabase<String> {
 
         /*
@@ -276,6 +311,47 @@ public class BuildObligationPolicyDatabase implements Detector2, NonReportingDet
         }
     }
 
+    public void addEntries() {
+        String fileName = "/proc_obligations";
+        List<String[]> list = parseCSV(fileName);
+        
+        System.out.println("add entry ing");
+        System.out.println(list.size());
+        for (int i = 0; i < list.size(); i++) {
+            String[] entry = list.get(i);
+            addMatchMenthodEntry(entry[0], entry[1], entry[2], "*", "*");
+        }
+    }
+
+    public void addMatchMenthodEntry(String className, String acquireResourceOpName, 
+    String releaseResourceOpName, String acquireResourceArgsAndRet, String releaseResourceArgsAndRet) {
+        try{
+            
+        Obligation obligation = database.getFactory().addObligation(className);
+
+        MatchMethodEntry op1Entry = new MatchMethodEntry(
+                new SubtypeTypeMatcher(BCELUtil.getObjectTypeInstance(className)),
+                new ExactStringMatcher(acquireResourceOpName), new ExactStringMatcher(acquireResourceArgsAndRet), false,
+                ObligationPolicyDatabaseActionType.ADD, ObligationPolicyDatabaseEntryType.STRONG, obligation);
+        
+        database.addEntry(op1Entry);
+
+        MatchMethodEntry op2Entry = new MatchMethodEntry(
+                new SubtypeTypeMatcher(BCELUtil.getObjectTypeInstance(className)),
+                new ExactStringMatcher(releaseResourceOpName), new ExactStringMatcher(releaseResourceArgsAndRet), false,
+                ObligationPolicyDatabaseActionType.DEL, ObligationPolicyDatabaseEntryType.STRONG, obligation);
+        
+        database.addEntry(op2Entry);
+    } catch (Exception e) {
+        System.out.println("obl" + className);
+            System.out.println("error"+e.getMessage());
+        }
+        
+
+        System.out.println("finish");
+        
+    }
+
     @Override
     public String getDetectorClassName() {
         return this.getClass().getName();
@@ -289,6 +365,7 @@ public class BuildObligationPolicyDatabase implements Detector2, NonReportingDet
         addFileStreamEntries("OutputStream");
         addFileStreamEntries("Reader");
         addFileStreamEntries("Writer");
+
 
         Obligation javaIoInputStreamObligation = database.getFactory().getObligationByName("java.io.InputStream");
         database.addEntry(new MatchMethodEntry(new SubtypeTypeMatcher(BCELUtil.getObjectTypeInstance("java.lang.Class")),
@@ -316,6 +393,11 @@ public class BuildObligationPolicyDatabase implements Detector2, NonReportingDet
         Obligation statement = database.getFactory().addObligation("java.sql.Statement");
         Obligation resultSet = database.getFactory().addObligation("java.sql.ResultSet");
 
+        Obligation stack = database.getFactory().addObligation("java.util.Stack");
+        Obligation lock = database.getFactory().addObligation("java.util.concurrent.locks.ReentrantLock");
+
+        addEntries();
+
         // Add factory method entries for database obligation types
         database.addEntry(new MatchMethodEntry(new SubtypeTypeMatcher(BCELUtil.getObjectTypeInstance("java.sql.DriverManager")),
                 new ExactStringMatcher("getConnection"), new RegexStringMatcher("^.*\\)Ljava/sql/Connection;$"), false,
@@ -329,6 +411,29 @@ public class BuildObligationPolicyDatabase implements Detector2, NonReportingDet
         database.addEntry(new MatchMethodEntry(new SubtypeTypeMatcher(BCELUtil.getObjectTypeInstance("java.sql.Statement")),
                 new ExactStringMatcher("executeQuery"), new RegexStringMatcher("^.*\\)Ljava/sql/ResultSet;$"), false,
                 ObligationPolicyDatabaseActionType.ADD, ObligationPolicyDatabaseEntryType.STRONG, resultSet));
+
+        database.addEntry(new MatchMethodEntry(
+                new SubtypeTypeMatcher(BCELUtil.getObjectTypeInstance("java.util.Stack")),
+                new ExactStringMatcher("peek"), new ExactStringMatcher("()Ljava/util/ArrayList"), false,
+                ObligationPolicyDatabaseActionType.ADD, ObligationPolicyDatabaseEntryType.STRONG, stack));
+
+        database.addEntry(new MatchMethodEntry(
+                new SubtypeTypeMatcher(BCELUtil.getObjectTypeInstance("java.util.Stack")),
+                new ExactStringMatcher("pop"), new ExactStringMatcher("()Ljava/util/ArrayList"), false,
+                ObligationPolicyDatabaseActionType.DEL, ObligationPolicyDatabaseEntryType.STRONG, stack));
+
+// 
+        // database.addEntry(
+        //         new MatchMethodEntry(new SubtypeTypeMatcher(BCELUtil.getObjectTypeInstance("java.util.concurrent.locks.ReentrantLock")),
+        //                 new ExactStringMatcher("lock"), new ExactStringMatcher("*"), false,
+        //                 ObligationPolicyDatabaseActionType.ADD,
+        //                 ObligationPolicyDatabaseEntryType.STRONG, lock));
+
+        // database.addEntry(
+        //         new MatchMethodEntry(new SubtypeTypeMatcher(BCELUtil.getObjectTypeInstance("java.util.concurrent.locks.ReentrantLock")),
+        //                 new ExactStringMatcher("unlock"), new ExactStringMatcher("*"), false,
+        //                 ObligationPolicyDatabaseActionType.DEL,
+        //                 ObligationPolicyDatabaseEntryType.STRONG, lock));
 
         // Add close method entries for database obligation types
         database.addEntry(new MatchMethodEntry(new SubtypeTypeMatcher(BCELUtil.getObjectTypeInstance("java.sql.Connection")),
@@ -431,6 +536,8 @@ public class BuildObligationPolicyDatabase implements Detector2, NonReportingDet
         for (XClass xclass : knownClasses) {
             // Is this class a resource type?
             if (xclass.getAnnotation(cleanupObligation) != null) {
+
+            System.out.println("this class a resource type" + xclass.getClassDescriptor());
                 // Add it as an obligation type
                 database.getFactory().addObligation(xclass.getClassDescriptor().toDottedClassName());
             }

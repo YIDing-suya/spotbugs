@@ -121,7 +121,7 @@ public class MatchMethodEntry implements ObligationPolicyDatabaseEntry {
     @Override
     public boolean getActions(ReferenceType receiverType, String methodName, String signature, boolean isStatic,
             Collection<ObligationPolicyDatabaseAction> actionList) {
-        if (this.methodName.matches(methodName) && this.signature.matches(signature) && this.isStatic == isStatic
+        if (this.methodName.matches(methodName) && (this.signature.matches(signature) || signature == "*" || this.signature.matches("*")) && this.isStatic == isStatic
                 && this.receiverType.matches(receiverType)) {
             for (Obligation o : obligations) {
                 actionList.add(new ObligationPolicyDatabaseAction(action, o));

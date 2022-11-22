@@ -72,16 +72,28 @@ public final class FindOpenStream extends ResourceTrackingDetector<Stream, Strea
      * ----------------------------------------------------------------------
      * Tracked resource types
      * ----------------------------------------------------------------------
+
+
+                            // OK, found a parameter that is a resource.
+                            // Create a Stream object to represent it.
+                            // The Stream will be uninteresting, so it will
+                            // inhibit reporting for any stream that wraps it.
+
      */
 
     /**
      * List of base classes of tracked resources.
      */
-    static final ObjectType[] streamBaseList = { ObjectTypeFactory.getInstance("java.io.InputStream"),
-        ObjectTypeFactory.getInstance("java.io.OutputStream"), ObjectTypeFactory.getInstance("java.util.zip.ZipFile"),
-        ObjectTypeFactory.getInstance("java.io.Reader"), ObjectTypeFactory.getInstance("java.io.Writer"),
-        ObjectTypeFactory.getInstance("java.sql.Connection"),
-        ObjectTypeFactory.getInstance("java.sql.Statement"), ObjectTypeFactory.getInstance("java.sql.ResultSet") };
+    static final ObjectType[] streamBaseList = {
+        //  ObjectTypeFactory.getInstance("java.io.InputStream"),
+        // ObjectTypeFactory.getInstance("java.io.OutputStream"), 
+        // ObjectTypeFactory.getInstance("java.util.zip.ZipFile"),
+        // ObjectTypeFactory.getInstance("java.io.Reader"), ObjectTypeFactory.getInstance("java.io.Writer"),
+        // ObjectTypeFactory.getInstance("java.sql.Connection"),
+        // ObjectTypeFactory.getInstance("java.sql.Statement"), ObjectTypeFactory.getInstance("java.sql.ResultSet") 
+        };
+// private static final String[] PRESCREEN_CLASS_LIST = { "Stream", "Reader", "Writer", "ZipFile", "JarFile", "DriverManager",
+//         "Connection", "Statement", "Files", "List" };
 
     /**
      * StreamFactory objects used to detect resources created within analyzed
@@ -96,8 +108,8 @@ public final class FindOpenStream extends ResourceTrackingDetector<Stream, Strea
         // ignoring byte array, char array, and String variants.
         streamFactoryCollection.add(new IOStreamFactory("java.io.InputStream", new String[] { "java.io.ByteArrayInputStream",
             "java.io.StringBufferInputStream", "java.io.PipedInputStream" }, "OS_OPEN_STREAM"));
-        streamFactoryCollection.add(new IOStreamFactory("java.io.OutputStream", new String[] { "java.io.ByteArrayOutputStream",
-            "java.io.PipedOutputStream" }, "OS_OPEN_STREAM"));
+        // streamFactoryCollection.add(new IOStreamFactory("java.io.OutputStream", new String[] { "java.io.ByteArrayOutputStream",
+        //     "java.io.PipedOutputStream" }, "OS_OPEN_STREAM"));
         streamFactoryCollection.add(new IOStreamFactory("java.io.Reader", new String[] { "java.io.StringReader",
             "java.io.CharArrayReader", "java.io.PipedReader" }, "OS_OPEN_STREAM"));
         streamFactoryCollection.add(new IOStreamFactory("java.io.Writer", new String[] { "java.io.StringWriter",
@@ -132,7 +144,27 @@ public final class FindOpenStream extends ResourceTrackingDetector<Stream, Strea
                 "(Ljava/nio/file/Path;)Ljava/io/BufferedReader;", "OS_OPEN_STREAM"));
         streamFactoryCollection.add(new MethodReturnValueStreamFactory("java.nio.file.Files", "newBufferedWriter",
                 "(Ljava/nio/file/Path;[Ljava/nio/file/OpenOption;)Ljava/io/BufferedWriter;", "OS_OPEN_STREAM"));
+        
 
+        streamFactoryCollection.add(new MethodReturnValueStreamFactory("java.io.OutputStream", "acquire",
+                 "()Ljava/util/ArrayList;", "OS_OPEN_STREAM"));
+
+        streamFactoryCollection.add(new MethodReturnValueStreamFactory("java.util.List", "acquireList",
+                 "()Ljava/util/ArrayList;", "OS_OPEN_STREAM"));
+
+        streamFactoryCollection.add(new MethodReturnValueStreamFactory("java.util.ArrayList", "acquireList",
+                 "()Ljava/util/ArrayList;", "OS_OPEN_STREAM"));
+
+        streamFactoryCollection.add(new MethodReturnValueStreamFactory("subList.SubList", "acquireArrayList",
+                 "()Ljava/util/ArrayList;", "OS_OPEN_STREAM"));
+
+        streamFactoryCollection.add(new MethodReturnValueStreamFactory("subList.SubStream", "acquireArrayList",
+                 "()Ljava/util/ArrayList;", "OS_OPEN_STREAM"));
+ 
+        streamFactoryCollection.add(new MethodReturnValueStreamFactory("java.util.Timer", "acquireArrayList",
+                 "()Ljava/util/ArrayList;", "OS_OPEN_STREAM"));
+
+      
         // Ignore socket input and output streams
         streamFactoryCollection.add(new MethodReturnValueStreamFactory("java.net.Socket", "getInputStream",
                 "()Ljava/io/InputStream;"));
@@ -281,8 +313,7 @@ public final class FindOpenStream extends ResourceTrackingDetector<Stream, Strea
     // create possible resources to be tracked. If we don't see a
     // class containing one of these words, then we don't run the
     // detector on the class.
-    private static final String[] PRESCREEN_CLASS_LIST = { "Stream", "Reader", "Writer", "ZipFile", "JarFile", "DriverManager",
-        "Connection", "Statement", "Files" };
+    private static final String[] PRESCREEN_CLASS_LIST = { "List", "SubList", "Timer", "ArrayList" };
 
     /*
      * (non-Javadoc)
@@ -438,16 +469,9 @@ public final class FindOpenStream extends ResourceTrackingDetector<Stream, Strea
                 equivalenceClass.setClosed();
             }
         }
-
-        // Iterate through potential open streams, reporting warnings
-        // for the "interesting" streams that haven't been closed
-        // (and aren't in an equivalence class with another stream
-        // that was closed).
         for (PotentialOpenStream pos : potentialOpenStreamList) {
             Stream stream = pos.stream;
             if (stream.isClosed()) {
-                // Stream was in an equivalence class with another
-                // stream that was properly closed.
                 continue;
             }
 
